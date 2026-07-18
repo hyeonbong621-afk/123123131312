@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세포막 물질 이동 탐구 랩</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        /* 커스텀 폰트 및 애니메이션 스타일 */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f3f4f6; }
+        
+        .tab-btn.active { border-bottom: 4px solid #3b82f6; color: #1d4ed8; font-weight: 700; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.5s ease-in-out; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 툴팁 */
+        #info-tooltip { pointer-events: none; transition: opacity 0.2s; }
+        
+        /* 3D 컨테이너 공통 */
+        .canvas-container { position: relative; width: 100%; overflow: hidden; background: #0f172a; border-radius: 0.75rem; border: 1px solid #334155; }
+        
+        /* 그래프 캔버스 겹치기 */
+        #osmosisGraphCanvas {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            width: 200px;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+        }
+
+        /* 용혈 현상 경고 텍스트 */
+        .hemolysis-warning {
+            animation: pulse-red 1s infinite alternate;
+        }
+        @keyframes pulse-red {
+            from { text-shadow: 0 0 10px red, 0 0 20px red; transform: translate(-50%, -50%) scale(1); }
+            to { text-shadow: 0 0 20px #ff4444, 0 0 30px #ff4444; transform: translate(-50%, -50%) scale(1.1); }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+<div class="max-w-5xl mx-auto p-4 md:p-8">
+    <!-- Header -->
+    <header class="bg-white rounded-2xl shadow-sm p-6 mb-6 flex items-center justify-between">
+        <div>
+            <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full mb-2 inline-block">고등학교 1학년 통합과학</span>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900">🔬 세포막을 통한 물질 이동 원리 탐구</h1>
+            <p class="text-gray-500 mt-1">디지털 시뮬레이션을 통해 눈에 보이지 않는 세포막의 물질 이동을 관찰해보자.</p>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-white rounded-t-2xl shadow-sm border-b border-gray-200 px-6 pt-4 flex space-x-6 overflow-x-auto">
+        <button onclick="switchTab('tab-structure')" class="tab-btn active pb-3 px-2 text-gray-500 hover:text-blue-600 font-medium whitespace-nowrap" id="btn-tab-structure">1차시: 세포막 구조</button>
+        <button onclick="switchTab('tab-diffusion')" class="tab-btn pb-3 px-2 text-gray-500 hover:text-blue-600 font-medium whitespace-nowrap" id="btn-tab-diffusion">2차시: 확산 시뮬레이션</button>
+        <button onclick="switchTab('tab-osmosis')" class="tab-btn pb-3 px-2 text-gray-500 hover:text-blue-600 font-medium whitespace-nowrap" id="btn-tab-osmosis">3차시: 삼투 현상</button>
+        <button onclick="switchTab('tab-apply')" class="tab-btn pb-3 px-2 text-gray-500 hover:text-blue-600 font-medium whitespace-nowrap" id="btn-tab-apply">4차시: 실생활 적용</button>
+        <button onclick="switchTab('tab-video')" class="tab-btn pb-3 px-2 text-gray-500 hover:text-blue-600 font-medium whitespace-nowrap" id="btn-tab-video">영상 시청</button>
+    </nav>
+
+    <main class="bg-white rounded-b-2xl shadow-sm p-6 md:p-8 min-h-[500px]">
+        
+        <!-- TAB 1: 구조 탐색 -->
+        <section id="tab-structure" class="tab-content active">
+            <h2 class="text-xl font-bold mb-4 text-blue-700">탐구 미션: 세포막은 어떻게 생겼을까? (3D)</h2>
+            <p class="mb-6">세포막은 세포 안팎의 물질 이동을 조절하는 문지기 역할을 합니다. <strong class="text-blue-600">마우스(또는 터치)로 드래그하여 세포막을 회전</strong>시켜 보고, 구조물에 마우스를 올려 각 부분의 명칭과 특징을 알아보세요.</p>
+            
+            <div class="canvas-container h-[400px] cursor-move flex items-center justify-center shadow-inner" id="membrane-3d-container">
+                <canvas id="membrane3DCanvas" class="w-full h-full block"></canvas>
+                
+                <div id="info-tooltip" class="absolute bg-white/95 text-gray-800 p-4 rounded-xl shadow-2xl opacity-0 transform -translate-x-1/2 -translate-y-full w-64 border-2 border-blue-400 z-10 text-sm">
+                    <h4 id="tooltip-title" class="font-bold text-blue-700 mb-1 text-base">구조 명칭</h4>
+                    <p id="tooltip-desc" class="text-gray-600">특징 설명이 여기에 표시됩니다.</p>
+                </div>
+                
+                <div class="absolute top-4 left-4 text-sm font-bold text-blue-300 bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">세포 밖 (고농도 물질)</div>
+                <div class="absolute bottom-4 left-4 text-sm font-bold text-green-300 bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm">세포 안 (저농도 물질)</div>
+                <div class="absolute top-4 right-4 text-xs text-gray-300 bg-black/40 px-3 py-1 rounded-full flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                    드래그하여 3D 회전
+                </div>
+            </div>
+
+            <div class="mt-8 bg-green-50 p-5 rounded-lg border border-green-200">
+                <h3 class="font-bold text-green-800 flex items-center"><svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> 핵심 개념: 선택적 투과성</h3>
+                <p class="text-sm mt-2 text-green-700">세포막은 물질의 종류, 크기, 전하에 따라 물질이 통과하는 것을 선택적으로 조절합니다. 이를 <strong>선택적 투과성</strong>이라고 하며, 이는 생명 시스템 유지에 필수적입니다.</p>
+            </div>
+        </section>
+
+        <!-- TAB 2: 확산 시뮬레이션 (3D로 변경됨) -->
+        <section id="tab-diffusion" class="tab-content">
+            <h2 class="text-xl font-bold mb-4 text-blue-700">탐구 미션: 물질은 세포막을 어떻게 통과할까? (3D 확산)</h2>
+            <p class="mb-4 text-sm">농도가 높은 곳에서 낮은 곳으로 물질이 스스로 이동하는 현상을 <strong>확산</strong>이라고 합니다. 입자를 추가하고 세포막을 3D로 관찰해보세요.</p>
+            
+            <div class="flex flex-col md:flex-row gap-6">
+                <div class="w-full md:w-2/3 flex flex-col gap-4">
+                    <!-- 3D 캔버스 영역 -->
+                    <div class="w-full canvas-container h-[400px] cursor-move relative" id="diffusion-3d-container">
+                        <canvas id="diffusion3DCanvas" class="w-full h-full block"></canvas>
+                        
+                        <div class="absolute top-4 left-4 flex flex-col gap-1 pointer-events-none">
+                            <div class="text-white font-bold text-sm bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm border border-slate-600 inline-block w-max">세포 밖 (고농도)</div>
+                            <div class="text-xs text-blue-200 bg-black/40 px-2 py-1 rounded w-max backdrop-blur-sm">산소(단순확산): <span id="out-small-cnt">0</span>개</div>
+                            <div class="text-xs text-red-200 bg-black/40 px-2 py-1 rounded w-max backdrop-blur-sm">포도당(촉진확산): <span id="out-large-cnt">0</span>개</div>
+                        </div>
+                        
+                        <div class="absolute top-4 right-4 flex flex-col gap-1 items-end pointer-events-none">
+                            <div class="text-white font-bold text-sm bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm border border-slate-600 inline-block w-max">세포 안 (저농도)</div>
+                            <div class="text-xs text-blue-200 bg-black/40 px-2 py-1 rounded w-max backdrop-blur-sm">산소(단순확산): <span id="in-small-cnt">0</span>개</div>
+                            <div class="text-xs text-red-200 bg-black/40 px-2 py-1 rounded w-max backdrop-blur-sm">포도당(촉진확산): <span id="in-large-cnt">0</span>개</div>
+                        </div>
+
+                        <div class="absolute bottom-4 left-4 text-xs text-gray-300 bg-black/50 px-3 py-2 rounded-lg flex flex-col gap-1 backdrop-blur-sm border border-slate-600 pointer-events-none">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                                드래그하여 관찰 시점 변경
+                            </div>
+                            <div class="flex items-center gap-2 border-t border-slate-600 pt-1 mt-1">
+                                <span class="font-semibold text-white">막을 통과한 입자:</span>
+                                <span id="moved-particles-display" class="font-mono text-green-300 text-sm">0</span> <span class="text-gray-400">개</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 flex justify-between items-center shadow-sm text-center">
+                        <div class="flex-1">
+                            <div class="text-xs text-gray-500 font-bold mb-1">세포 밖 입자 수</div>
+                            <div class="text-3xl font-black text-gray-800" id="status-out-total">0</div>
+                        </div>
+                        <div class="w-px h-12 bg-gray-300 mx-2"></div>
+                        <div class="flex-1 flex flex-col items-center justify-center">
+                            <div class="text-xs text-gray-500 font-bold mb-2">순 이동 방향</div>
+                            <div id="status-direction" class="bg-gray-200 text-gray-500 font-bold py-1.5 px-4 rounded-full text-sm inline-flex items-center justify-center transition-colors">
+                                입자 없음
+                            </div>
+                        </div>
+                        <div class="w-px h-12 bg-gray-300 mx-2"></div>
+                        <div class="flex-1">
+                            <div class="text-xs text-gray-500 font-bold mb-1">세포 안 입자 수</div>
+                            <div class="text-3xl font-black text-gray-800" id="status-in-total">0</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 조작 패널 -->
+                <div class="w-full md:w-1/3 flex flex-col gap-4">
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                        <h3 class="font-bold mb-3 text-gray-700">변인 조작 (입자 추가)</h3>
+                        <button onclick="addParticles3D('small', 15)" class="w-full mb-2 bg-blue-100 hover:bg-blue-200 text-blue-800 font-semibold py-2 px-4 rounded shadow-sm flex items-center justify-between transition">
+                            <span class="text-left">산소 (크기가 작음)<br><span class="text-xs font-normal text-blue-600">단순 확산 관찰</span></span>
+                            <span class="w-3 h-3 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)]"></span>
+                        </button>
+                        <button onclick="addParticles3D('large', 5)" class="w-full bg-red-100 hover:bg-red-200 text-red-800 font-semibold py-2 px-4 rounded shadow-sm flex items-center justify-between transition">
+                            <span class="text-left">포도당 (크기가 큼)<br><span class="text-xs font-normal text-red-600">촉진 확산 관찰</span></span>
+                            <span class="w-5 h-5 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+                        </button>
+                        <button onclick="clearParticles3D()" class="w-full mt-4 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded transition">
+                            화면 초기화
+                        </button>
+                    </div>
+
+                    <div class="bg-purple-50 p-4 rounded-xl border border-purple-200">
+                        <h3 class="font-bold mb-3 text-purple-800">막단백질 통로 설정 (촉진 확산용)</h3>
+                        <p class="text-xs text-purple-700 mb-2">포도당과 같이 큰 물질이나 전하를 띤 이온은 인지질을 뚫지 못하고 막단백질 통로가 있어야만 이동할 수 있습니다.</p>
+                        <div class="flex justify-between gap-2">
+                            <button onclick="setProteinChannels(0)" id="btn-ch-0" class="flex-1 bg-white hover:bg-purple-100 text-gray-800 font-semibold py-1 px-1 border border-purple-300 rounded shadow-sm text-sm transition">0개</button>
+                            <button onclick="setProteinChannels(1)" id="btn-ch-1" class="flex-1 bg-white hover:bg-purple-100 text-gray-800 font-semibold py-1 px-1 border border-purple-300 rounded shadow-sm text-sm transition ring-2 ring-purple-500">1개</button>
+                            <button onclick="setProteinChannels(2)" id="btn-ch-2" class="flex-1 bg-white hover:bg-purple-100 text-gray-800 font-semibold py-1 px-1 border border-purple-300 rounded shadow-sm text-sm transition">2개</button>
+                            <button onclick="setProteinChannels(3)" id="btn-ch-3" class="flex-1 bg-white hover:bg-purple-100 text-gray-800 font-semibold py-1 px-1 border border-purple-300 rounded shadow-sm text-sm transition">3개</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-yellow-50 p-4 rounded-xl border border-yellow-200 flex-1">
+                        <h3 class="font-bold mb-2 text-yellow-800 flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> 확산의 두 가지 종류</h3>
+                        <ul class="text-sm space-y-2 text-yellow-900">
+                            <li>• <strong class="text-blue-700">단순 확산:</strong> 크기가 작은 기체 분자(산소, 이산화탄소) 등이 인지질 이중층을 직접 통과합니다. 농도 차이가 클수록 속도가 무한정 빨라집니다.</li>
+                            <li>• <strong class="text-red-700">촉진 확산:</strong> 포도당, 아미노산, 이온 등은 인지질을 뚫지 못하고 <strong>막단백질</strong>을 통해서만 이동합니다. 통로 개수가 한정되어 있어 일정 농도 이상에서는 이동 속도가 더 이상 증가하지 않습니다.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: 삼투 현상 -->
+        <section id="tab-osmosis" class="tab-content">
+            <h2 class="text-xl font-bold mb-4 text-blue-700">탐구 미션: 세포를 다른 농도의 용액에 넣으면? (동적 삼투)</h2>
+            <p class="mb-4 text-sm">세포막을 통해 <strong>물</strong>이 저농도에서 고농도로 이동합니다. 적혈구의 <strong>실시간 부피 변화</strong>와 물 분자 이동, 그리고 한계점에 도달했을 때의 현상을 관찰하세요.</p>
+
+            <div class="flex flex-col items-center">
+                <!-- 3D 실험 도구 UI -->
+                <div class="canvas-container h-[400px] cursor-move relative" id="osmosis-3d-container">
+                    <canvas id="osmosis3DCanvas" class="w-full h-full block"></canvas>
+                    
+                    <!-- 실시간 그래프 캔버스 오버레이 -->
+                    <canvas id="osmosisGraphCanvas"></canvas>
+                    
+                    <div class="absolute top-4 left-4 text-sm font-bold text-white bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm border border-slate-600">용액 (세포 밖)</div>
+                    <div class="absolute top-4 right-4 text-xs font-bold text-blue-300 bg-black/60 px-3 py-1 rounded-full flex items-center gap-2 border border-slate-600">
+                         <span class="w-3 h-3 bg-blue-400 rounded-full inline-block shadow-[0_0_8px_rgba(96,165,250,0.8)]"></span> 물 분자 이동
+                    </div>
+                    
+                    <!-- 용혈 현상 경고 텍스트 (숨김 상태) -->
+                    <div id="hemolysis-alert" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 hidden z-20 pointer-events-none text-center">
+                        <h2 class="text-4xl md:text-5xl font-black text-red-500 hemolysis-warning">용혈 현상 발생!</h2>
+                        <p class="text-white font-bold mt-2 bg-black/50 px-4 py-1 rounded-full backdrop-blur-sm">세포가 물을 너무 많이 흡수하여 터졌습니다.</p>
+                    </div>
+
+                    <div class="absolute bottom-4 right-4 text-xs text-gray-400 bg-black/40 px-3 py-1 rounded-full flex items-center gap-2">
+                        마우스 드래그로 회전
+                    </div>
+                </div>
+
+                <!-- 상태 텍스트 -->
+                <div class="mt-6 text-center h-16 transition-all duration-300">
+                    <h3 id="osmosis-title" class="font-bold text-lg text-gray-800">등장액 (세포 안팎의 농도가 같음)</h3>
+                    <p id="osmosis-desc" class="text-gray-600 text-sm mt-1">들어오는 물과 나가는 물의 양이 같아 적혈구의 부피와 모양이 일정하게 유지됩니다.</p>
+                </div>
+
+                <!-- 조작 버튼 -->
+                <div class="flex flex-wrap justify-center gap-4 mt-4">
+                    <button onclick="setOsmosis('hypotonic')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-full shadow-md transition transform hover:scale-105 border-2 border-blue-600">
+                        저장액 (맹물)
+                    </button>
+                    <button onclick="setOsmosis('isotonic')" class="bg-slate-500 hover:bg-slate-600 text-white font-bold py-2 px-6 rounded-full shadow-md transition transform hover:scale-105 border-2 border-slate-600">
+                        등장액 (생리식염수)
+                    </button>
+                    <button onclick="setOsmosis('hypertonic')" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-full shadow-md transition transform hover:scale-105 border-2 border-purple-600">
+                        고장액 (진한 소금물)
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4 & 5 (생략 없이 유지) -->
+        <section id="tab-apply" class="tab-content">
+            <h2 class="text-xl font-bold mb-4 text-blue-700">수행 미션: 과학적 해결 방안 제안서 (모둠 토의)</h2>
+            <p class="mb-6 text-gray-700">모둠원들과 함께 실생활 속 세포막 물질 이동 사례를 분석하고, 과학적인 해결 방안이나 활용 방안을 제안하는 인포그래픽 기획안을 작성해 보세요.</p>
+            <div class="bg-white border border-gray-200 shadow-sm rounded-xl p-6">
+                <form id="proposal-form" class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">모둠명 및 구성원</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="form-group" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="예: 1모둠 (홍길동, 김철수, 이영희)">
+                            <button type="button" onclick="checkFeedback()" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-4 rounded-lg shadow-sm transition border border-indigo-200 whitespace-nowrap flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                                피드백 확인
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">탐구할 실생활 현상 선택</label>
+                        <select id="form-topic" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                            <option value="">-- 사례를 선택하세요 --</option>
+                            <option value="김장할 때 배추 절이기">김장할 때 배추 절이기</option>
+                            <option value="목욕탕에 오래 있으면 손가락이 쭈글쭈글해지는 현상">목욕탕에 오래 있으면 손가락이 쭈글쭈글해지는 현상</option>
+                            <option value="식물에 비료를 너무 많이 주어 말라 죽는 현상">식물에 비료를 너무 많이 주어 말라 죽는 현상</option>
+                            <option value="시든 식물에 물을 주면 다시 살아나는 현상">시든 식물에 물을 주면 다시 살아나는 현상</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">세포막 물질 이동 원리(확산/삼투)를 적용한 현상 분석</label>
+                        <textarea id="form-analysis" rows="3" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="선택한 현상이 왜 일어나는지 농도 차이와 물질(물 등)의 이동 방향을 포함하여 과학적으로 설명해주세요."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">해당 원리를 활용한 과학적 해결 방안 제안</label>
+                        <textarea id="form-solution" rows="3" class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="예: 싱싱한 배추를 오래 보관하기 위한 방법, 식물에 올바르게 비료를 주는 방법 등 인포그래픽에 담을 핵심 해결책을 적어주세요."></textarea>
+                    </div>
+                    <div class="pt-4 flex justify-end">
+                        <button type="button" onclick="submitProposal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition transform hover:-translate-y-1">제안서 제출하기</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section id="tab-video" class="tab-content">
+            <h2 class="text-xl font-bold mb-4 text-blue-700">📺 개념 학습: 영상으로 복습하기</h2>
+            <p class="mb-6 text-gray-700">확산과 삼투 현상의 원리가 헷갈린다면, 아래의 추천 영상을 통해 개념을 다시 한번 확실히 다져보세요.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+                    <div class="relative w-full pb-[56.25%] bg-black">
+                        <iframe class="absolute top-0 left-0 w-full h-full" src="https://www.youtube.com/embed/oAt4FlVd8ro" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+                    </div>
+                    <div class="p-5 bg-gray-50 flex-1 border-t border-gray-100">
+                        <span class="inline-block px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded mb-2">기본/핵심 개념</span>
+                        <h3 class="font-bold text-gray-900 text-base mb-2">[통합과학] 확산과 삼투 완벽 정리</h3>
+                        <p class="text-sm text-gray-600">고농도, 저농도의 헷갈리는 개념을 알기 쉽게 설명해주는 영상입니다.</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+                    <div class="relative w-full pb-[56.25%] bg-black">
+                        <iframe class="absolute top-0 left-0 w-full h-full" src="https://www.youtube.com/embed/ULPSQOi6mBU" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+                    </div>
+                    <div class="p-5 bg-gray-50 flex-1 border-t border-gray-100">
+                        <span class="inline-block px-2 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded mb-2">구조/심화 연계</span>
+                        <h3 class="font-bold text-gray-900 text-base mb-2">세포막의 구조와 물질 이동</h3>
+                        <p class="text-sm text-gray-600">단순 확산과 촉진 확산의 차이점을 애니메이션으로 살펴봅니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 교사용 UI 모달 등 (기존 코드 유지) -->
+    <button onclick="openPasswordModal()" class="fixed bottom-6 right-6 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-full py-3 px-6 shadow-2xl transition transform hover:scale-105 z-40 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+        교사 대시보드
+    </button>
+
+    <div id="pw-modal" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-2xl shadow-xl w-80 transform transition-all">
+            <h3 class="font-bold text-lg mb-4 text-gray-900">교사 전용 페이지 인증</h3>
+            <p class="text-xs text-gray-500 mb-3">대시보드에 접근하려면 비밀번호를 입력하세요.</p>
+            <input type="password" id="admin-pw" class="w-full border border-gray-300 p-3 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="비밀번호 입력">
+            <div class="flex justify-end gap-2">
+                <button onclick="closePasswordModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">취소</button>
+                <button onclick="verifyPassword()" class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 대시보드 및 커스텀 얼럿 UI 생략 없이 유지됨 (아래 스크립트에서 기능 연결) -->
+    <div id="teacher-dashboard" class="fixed inset-0 bg-gray-100 hidden z-50 overflow-y-auto">
+        <div class="max-w-6xl mx-auto p-6 min-h-screen">
+            <div class="flex justify-between items-center mb-8 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900 flex items-center gap-2">모둠 제안서 관리 대시보드</h2>
+                    <p class="text-gray-500 text-sm mt-1">학생들이 제출한 과학적 해결 방안 제안서를 확인하고 AI 피드백을 제공합니다.</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="downloadCSV()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow transition">CSV 다운로드</button>
+                    <button onclick="closeDashboard()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition">닫기</button>
+                </div>
+            </div>
+            <div id="dashboard-content" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+        </div>
+    </div>
+
+    <div id="custom-alert" class="fixed inset-0 bg-black/50 hidden z-[60] flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl w-80 text-center transform transition-all scale-95">
+            <p id="alert-message" class="mb-6 text-gray-800 font-medium"></p>
+            <button onclick="closeAlert()" class="px-6 py-2 w-full bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">확인</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 탭 전환 로직 ---
+    let animIdStructure = null;
+    let animIdDiffusion = null;
+    let animIdOsmosis = null;
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active', 'border-bottom', 'border-blue-600'));
+        
+        document.getElementById(tabId).classList.add('active');
+        document.getElementById(tabId.replace('tab-', 'btn-tab-')).classList.add('active');
+
+        // Three.js 리사이즈 및 렌더링 최적화
+        if(tabId === 'tab-structure') { resize3DCanvas('membrane-3d-container', camera1, renderer1); }
+        if(tabId === 'tab-diffusion') { resize3DCanvas('diffusion-3d-container', camera2, renderer2); }
+        if(tabId === 'tab-osmosis') { resize3DCanvas('osmosis-3d-container', camera3, renderer3); }
+    }
+
+    // Three.js 공통 유틸
+    function resize3DCanvas(containerId, camera, renderer) {
+        if(!camera || !renderer) return;
+        const container = document.getElementById(containerId);
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    // =========================================================
+    // 1차시: 세포막 구조 (기존 로직 유지, 변수명 정리)
+    // =========================================================
+    let scene1, camera1, renderer1, membraneGroup1;
+    let isDragging1 = false, prevMouse1 = { x:0, y:0 };
+    
+    let raycaster1 = new THREE.Raycaster();
+    let mouse1 = new THREE.Vector2();
+    let tooltipEl, tooltipTitle, tooltipDesc;
+    
+    function initStructure3D() {
+        const container = document.getElementById('membrane-3d-container');
+        const canvas = document.getElementById('membrane3DCanvas');
+        
+        // 누락되었던 씬, 카메라, 렌더러 초기화 코드 추가
+        scene1 = new THREE.Scene();
+        
+        camera1 = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera1.position.set(0, 5, 14); // 위에서 비스듬히 바라보도록 설정
+        camera1.lookAt(0, 0, 0);
+        
+        renderer1 = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+        renderer1.setSize(container.clientWidth, container.clientHeight);
+        renderer1.setPixelRatio(window.devicePixelRatio);
+
+        // 툴팁 요소 캐싱
+        tooltipEl = document.getElementById('info-tooltip');
+        tooltipTitle = document.getElementById('tooltip-title');
+        tooltipDesc = document.getElementById('tooltip-desc');
+
+        scene1.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); dirLight.position.set(10, 20, 10); scene1.add(dirLight);
+        
+        membraneGroup1 = new THREE.Group();
+        scene1.add(membraneGroup1);
+
+        // 간략화된 인지질 이중층 (기존 1차시 코드)
+        const headMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 });
+        const tailMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.8 });
+        
+        function createPhospholipid() {
+            const group = new THREE.Group();
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), headMat); head.position.y = 1.2;
+            const tail1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.05, 1.8, 8), tailMat); tail1.position.set(-0.25, 0, 0); tail1.rotation.z = 0.1;
+            const tail2 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.05, 1.8, 8), tailMat); tail2.position.set(0.25, 0, 0); tail2.rotation.z = -0.1;
+            
+            head.userData = { name: '인지질 머리 (친수성)', desc: '친수성(물을 좋아함)을 띠며, 세포 안팎의 수용액과 맞닿아 있습니다.' };
+            tail1.userData = tail2.userData = { name: '인지질 꼬리 (소수성)', desc: '소수성(물을 싫어함)을 띠며, 막 안쪽을 향해 서로 마주보고 배열되어 수용성 물질의 이동을 막습니다.' };
+            
+            group.add(head, tail1, tail2); return group;
+        }
+
+        for(let i=-6; i<=6; i++) {
+            for(let j=-3; j<=3; j++) {
+                if(i >= -1 && i <= 1 && j >= -1 && j <= 1) continue; // 단백질 자리
+                const top = createPhospholipid(); top.position.set(i*1.3, 1.5, j*1.3); membraneGroup1.add(top);
+                const bot = createPhospholipid(); bot.position.set(i*1.3, -1.5, j*1.3); bot.rotation.x = Math.PI; membraneGroup1.add(bot);
+            }
+        }
+        
+        // 막단백질
+        const pMat = new THREE.MeshStandardMaterial({ color: 0xa855f7 });
+        const protein = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 5, 32), pMat);
+        protein.userData = { name: '막단백질', desc: '크기가 큰 물질이나 이온의 이동 통로가 됩니다.' };
+        membraneGroup1.add(protein);
+        
+        membraneGroup1.rotation.x = 0.2; membraneGroup1.rotation.y = 0.5;
+
+        // 드래그 로직
+        container.addEventListener('mousedown', e => { isDragging1 = true; prevMouse1 = { x: e.offsetX, y: e.offsetY }; });
+        window.addEventListener('mouseup', () => isDragging1 = false);
+        
+        container.addEventListener('mousemove', e => {
+            const rect = container.getBoundingClientRect();
+            // Raycaster용 마우스 좌표 정규화 (-1 ~ 1)
+            mouse1.x = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
+            mouse1.y = -((e.clientY - rect.top) / container.clientHeight) * 2 + 1;
+
+            if(isDragging1) {
+                membraneGroup1.rotation.y += (e.offsetX - prevMouse1.x) * 0.005;
+                membraneGroup1.rotation.x += (e.offsetY - prevMouse1.y) * 0.005;
+                prevMouse1 = { x: e.offsetX, y: e.offsetY };
+            }
+        });
+        
+        animateStructure3D();
+    }
+    
+    function animateStructure3D() {
+        requestAnimationFrame(animateStructure3D);
+        if(document.getElementById('tab-structure').classList.contains('active')) {
+            if(!isDragging1) { membraneGroup1.rotation.y += 0.001; membraneGroup1.position.y = Math.sin(Date.now()*0.001)*0.2; }
+            
+            raycaster1.setFromCamera(mouse1, camera1);
+            const intersects = raycaster1.intersectObjects(membraneGroup1.children, true); // 자식까지 검사
+            let foundTooltip = false;
+            
+            for(let i=0; i<intersects.length; i++) {
+                const userData = intersects[i].object.userData;
+                if(userData && userData.name) {
+                    tooltipTitle.innerText = userData.name;
+                    tooltipDesc.innerText = userData.desc;
+                    // 정규화된 마우스 위치를 다시 CSS 픽셀 위치로 변환
+                    const domX = (mouse1.x * 0.5 + 0.5) * renderer1.domElement.clientWidth;
+                    const domY = (-mouse1.y * 0.5 + 0.5) * renderer1.domElement.clientHeight;
+                    tooltipEl.style.left = domX + 'px';
+                    tooltipEl.style.top = (domY - 15) + 'px';
+                    tooltipEl.style.opacity = '1';
+                    foundTooltip = true;
+                    break;
+                }
+            }
+            if(!foundTooltip) tooltipEl.style.opacity = '0';
+
+            renderer1.render(scene1, camera1);
+        }
+    }
+
+    // =========================================================
+    // 2차시: 확산 시뮬레이션 (3D로 대폭 개편)
+    // =========================================================
+    let scene2, camera2, renderer2;
+    let membraneGroup2;
+    let diffParticles = [];
+    let isDragging2 = false, prevMouse2 = {x:0, y:0};
+    
+    let activeChannelCount = 1;
+    const channelConfigs = [
+        { y: 0, z: 0 },   // 1번 통로 (중앙)
+        { y: 4, z: 0 },   // 2번 통로 (상단)
+        { y: -4, z: 0 }   // 3번 통로 (하단)
+    ];
+    let proteinChannelObjects = [];
+    
+    function initDiffusion3D() {
+        const container = document.getElementById('diffusion-3d-container');
+        const canvas = document.getElementById('diffusion3DCanvas');
+        
+        scene2 = new THREE.Scene();
+        scene2.fog = new THREE.FogExp2(0x0f172a, 0.015);
+        
+        camera2 = new THREE.PerspectiveCamera(50, container.clientWidth/container.clientHeight, 0.1, 100);
+        camera2.position.set(0, 10, 20); // 위쪽에서 비스듬히 내려다보는 뷰
+        camera2.lookAt(0, 0, 0);
+        
+        renderer2 = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+        renderer2.setSize(container.clientWidth, container.clientHeight);
+        renderer2.setPixelRatio(window.devicePixelRatio);
+
+        scene2.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const light = new THREE.DirectionalLight(0xffffff, 0.8); light.position.set(5, 10, 5); scene2.add(light);
+        const backLight = new THREE.DirectionalLight(0x3b82f6, 0.5); backLight.position.set(-5, -5, -5); scene2.add(backLight);
+
+        // 시뮬레이션 공간 경계 박스 (시각적 가이드)
+        const boxGeo = new THREE.BoxGeometry(24, 12, 12);
+        const boxMat = new THREE.MeshBasicMaterial({ color: 0x334155, wireframe: true, transparent: true, opacity: 0.2 });
+        scene2.add(new THREE.Mesh(boxGeo, boxMat));
+
+        // 세포막 그룹 생성 (가운데 위치)
+        membraneGroup2 = new THREE.Group();
+        
+        // 반투명 인지질 장벽
+        const lipidMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+        const lipidWallTop = new THREE.Mesh(new THREE.BoxGeometry(1, 12, 4.5), lipidMat); lipidWallTop.position.z = -3.75;
+        const lipidWallBot = new THREE.Mesh(new THREE.BoxGeometry(1, 12, 4.5), lipidMat); lipidWallBot.position.z = 3.75;
+        
+        membraneGroup2.add(lipidWallTop, lipidWallBot);
+        
+        const pMat = new THREE.MeshStandardMaterial({ color: 0xa855f7, transparent: true, opacity: 0.8 });
+        const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+        channelConfigs.forEach((cfg, idx) => {
+            const group = new THREE.Group();
+            
+            const proteinChannel = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 2, 32), pMat);
+            proteinChannel.rotation.x = Math.PI / 2; // 통로가 X축을 향하도록
+            proteinChannel.rotation.z = Math.PI / 2;
+            
+            const hole = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 2.1, 32), holeMat);
+            hole.rotation.x = Math.PI / 2; hole.rotation.z = Math.PI / 2;
+            
+            group.add(proteinChannel, hole);
+            group.position.set(0, cfg.y, cfg.z);
+            
+            // 초기 활성화 상태
+            group.visible = idx < activeChannelCount;
+            membraneGroup2.add(group);
+            proteinChannelObjects.push(group);
+        });
+
+        scene2.add(membraneGroup2);
+
+        // 시점 컨트롤
+        container.addEventListener('mousedown', e => { isDragging2 = true; prevMouse2 = { x: e.offsetX, y: e.offsetY }; });
+        window.addEventListener('mouseup', () => isDragging2 = false);
+        container.addEventListener('mousemove', e => {
+            if(isDragging2) {
+                scene2.rotation.y += (e.offsetX - prevMouse2.x) * 0.005;
+                scene2.rotation.x += (e.offsetY - prevMouse2.y) * 0.005;
+                prevMouse2 = { x: e.offsetX, y: e.offsetY };
+            }
+        });
+
+        animateDiffusion3D();
+    }
+
+    function setProteinChannels(count) {
+        activeChannelCount = count;
+        // 3D 객체 가시성 업데이트
+        proteinChannelObjects.forEach((obj, idx) => {
+            obj.visible = idx < count;
+        });
+        // UI 버튼 스타일 업데이트
+        for(let i=0; i<=3; i++) {
+            const btn = document.getElementById(`btn-ch-${i}`);
+            if(btn) {
+                if(i === count) btn.classList.add('ring-2', 'ring-purple-500');
+                else btn.classList.remove('ring-2', 'ring-purple-500');
+            }
+        }
+    }
+
+    function addParticles3D(type, count) {
+        const isSmall = (type === 'small');
+        const geo = new THREE.SphereGeometry(isSmall ? 0.4 : 0.8, 16, 16);
+        const mat = new THREE.MeshStandardMaterial({
+            color: isSmall ? 0x3b82f6 : 0xef4444, // 산소 파랑, 포도당 빨강
+            emissive: isSmall ? 0x1d4ed8 : 0xb91c1c,
+            emissiveIntensity: 0.5
+        });
+
+        for(let i=0; i<count; i++) {
+            const mesh = new THREE.Mesh(geo, mat);
+            // 세포 밖(왼쪽, X가 음수) 영역에 무작위 생성
+            mesh.position.set(
+                -10 + Math.random() * 8, 
+                -5 + Math.random() * 10, 
+                -5 + Math.random() * 10
+            );
+            
+            scene2.add(mesh);
+            diffParticles.push({
+                mesh: mesh,
+                type: type,
+                radius: isSmall ? 0.4 : 0.8,
+                vx: (Math.random() - 0.2) * 0.1, // 오른쪽(양수 X)으로 향하는 경향성
+                vy: (Math.random() - 0.5) * 0.1,
+                vz: (Math.random() - 0.5) * 0.1
+            });
+        }
+    }
+
+    function clearParticles3D() {
+        diffParticles.forEach(p => scene2.remove(p.mesh));
+        diffParticles = [];
+    }
+
+    function animateDiffusion3D() {
+        requestAnimationFrame(animateDiffusion3D);
+        if(!document.getElementById('tab-diffusion').classList.contains('active')) return;
+
+        // 경계값 (시각적 박스 내부)
+        const bounds = { x: 11.5, y: 5.5, z: 5.5 };
+
+        let outSmall = 0, outLarge = 0, inSmall = 0, inLarge = 0;
+        let totalSpeed = 0;
+
+        diffParticles.forEach(p => {
+            p.mesh.position.x += p.vx;
+            p.mesh.position.y += p.vy;
+            p.mesh.position.z += p.vz;
+
+            // 외벽 바운스
+            if(Math.abs(p.mesh.position.x) > bounds.x - p.radius) { p.vx *= -1; p.mesh.position.x = Math.sign(p.mesh.position.x) * (bounds.x - p.radius); }
+            if(Math.abs(p.mesh.position.y) > bounds.y - p.radius) { p.vy *= -1; p.mesh.position.y = Math.sign(p.mesh.position.y) * (bounds.y - p.radius); }
+            if(Math.abs(p.mesh.position.z) > bounds.z - p.radius) { p.vz *= -1; p.mesh.position.z = Math.sign(p.mesh.position.z) * (bounds.z - p.radius); }
+
+            // 세포막(가운데 X=0) 충돌 처리
+            const memThick = 0.5; // 반두께
+            if(Math.abs(p.mesh.position.x) < memThick + p.radius) {
+                
+                let isInChannel = false;
+                for(let i=0; i<activeChannelCount; i++) {
+                    const cfg = channelConfigs[i];
+                    const distFromCenter = Math.sqrt((p.mesh.position.y - cfg.y)**2 + (p.mesh.position.z - cfg.z)**2);
+                    if(distFromCenter < 1.2) {
+                        isInChannel = true;
+                        break;
+                    }
+                }
+
+                if (p.type === 'large') {
+                    // 큰 분자는 통로로만! 통로 밖이면 튕김
+                    if (!isInChannel) {
+                        p.vx *= -1;
+                        p.mesh.position.x = Math.sign(p.mesh.position.x) * (memThick + p.radius + 0.1);
+                    }
+                } else {
+                    // 작은 분자는 통과하지만 인지질 속에서 약간 느려짐 (저항)
+                    if(!isInChannel) {
+                        p.vx *= 0.98;
+                    }
+                }
+            }
+
+            // 브라운 운동 (랜덤성 부여)
+            p.vx += (Math.random() - 0.5) * 0.01;
+            p.vy += (Math.random() - 0.5) * 0.01;
+            p.vz += (Math.random() - 0.5) * 0.01;
+            
+            // 속도 제한
+            const speedLimit = p.type === 'small' ? 0.15 : 0.08;
+            p.vx = Math.max(-speedLimit, Math.min(speedLimit, p.vx));
+            p.vy = Math.max(-speedLimit, Math.min(speedLimit, p.vy));
+            p.vz = Math.max(-speedLimit, Math.min(speedLimit, p.vz));
+
+            // 개수 및 속도 계산 로직 추가
+            if (p.mesh.position.x < 0) { // 세포 밖 (왼쪽)
+                if (p.type === 'small') outSmall++; else outLarge++;
+            } else { // 세포 안 (오른쪽)
+                if (p.type === 'small') inSmall++; else inLarge++;
+            }
+            // 현재 입자의 속력 스칼라값 누적
+            totalSpeed += Math.sqrt(p.vx*p.vx + p.vy*p.vy + p.vz*p.vz);
+        });
+
+        // UI 업데이트 (개수 및 평균 속도)
+        document.getElementById('out-small-cnt').innerText = outSmall;
+        document.getElementById('out-large-cnt').innerText = outLarge;
+        document.getElementById('in-small-cnt').innerText = inSmall;
+        document.getElementById('in-large-cnt').innerText = inLarge;
+
+        const totalOut = outSmall + outLarge;
+        const totalIn = inSmall + inLarge;
+
+        // 막을 통과한(세포 안으로 이동한) 입자 수 표시
+        const movedDisplay = document.getElementById('moved-particles-display');
+        if (movedDisplay) movedDisplay.innerText = totalIn;
+
+        const outDisplay = document.getElementById('status-out-total');
+        const inDisplay = document.getElementById('status-in-total');
+        const dirDisplay = document.getElementById('status-direction');
+
+        if(outDisplay) outDisplay.innerText = totalOut;
+        if(inDisplay) inDisplay.innerText = totalIn;
+
+        if(dirDisplay) {
+            if(totalOut === 0 && totalIn === 0) {
+                dirDisplay.innerHTML = '입자 없음';
+                dirDisplay.className = 'bg-gray-200 text-gray-500 font-bold py-1.5 px-4 rounded-full text-sm inline-flex items-center justify-center transition-colors';
+            } else if (totalOut > totalIn) {
+                dirDisplay.innerHTML = '세포 안으로 이동 중 <svg class="w-4 h-4 ml-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>';
+                dirDisplay.className = 'bg-blue-100 text-blue-700 font-bold py-1.5 px-4 rounded-full text-sm inline-flex items-center justify-center transition-colors';
+            } else if (totalOut < totalIn) {
+                dirDisplay.innerHTML = '<svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg> 세포 밖으로 이동 중';
+                dirDisplay.className = 'bg-blue-100 text-blue-700 font-bold py-1.5 px-4 rounded-full text-sm inline-flex items-center justify-center transition-colors';
+            } else {
+                dirDisplay.innerHTML = '동적 평형 상태 <svg class="w-4 h-4 ml-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>';
+                dirDisplay.className = 'bg-green-100 text-green-700 font-bold py-1.5 px-4 rounded-full text-sm inline-flex items-center justify-center transition-colors';
+            }
+        }
+
+        renderer2.render(scene2, camera2);
+    }
+
+
+    // =========================================================
+    // 3차시: 삼투 현상 (동적 부피 변화, 실시간 그래프, 용혈)
+    // =========================================================
+    let scene3, camera3, renderer3;
+    let cellMesh3;
+    let waterParticles3 = [];
+    let isDragging3 = false, prevMouse3 = { x:0, y:0 };
+    
+    // 상태 변수들
+    let currentCellMode = 'isotonic'; 
+    let volumePercent = 100; // 기준 부피 100%
+    let targetVolumePercent = 100;
+    let isHemolysis = false;
+    let explosionParticles = [];
+    
+    // 그래프용 데이터 배열
+    let volumeHistory = [];
+    let graphTick = 0;
+
+    function initOsmosis3D() {
+        const container = document.getElementById('osmosis-3d-container');
+        const canvas = document.getElementById('osmosis3DCanvas');
+
+        scene3 = new THREE.Scene();
+        scene3.fog = new THREE.FogExp2(0x0f172a, 0.05);
+
+        camera3 = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera3.position.z = 7;
+
+        renderer3 = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        renderer3.setSize(container.clientWidth, container.clientHeight);
+        renderer3.setPixelRatio(window.devicePixelRatio);
+
+        scene3.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1); dirLight.position.set(5, 5, 5); scene3.add(dirLight);
+        const backLight = new THREE.DirectionalLight(0xffa2b5, 0.6); backLight.position.set(-5, -5, -5); scene3.add(backLight);
+
+        const geo = new THREE.SphereGeometry(1.5, 64, 64);
+        const mat = new THREE.MeshStandardMaterial({ 
+            color: 0xff3333, // 더 선명한 빨간색으로 변경
+            roughness: 0.3, 
+            metalness: 0.2,
+            transparent: true, 
+            opacity: 0.4, // 투명도를 높여 형태가 잘 보이도록 수정 (기존 0.15 -> 0.4)
+            depthWrite: false, 
+            side: THREE.DoubleSide 
+        });
+        
+        cellMesh3 = new THREE.Mesh(geo, mat);
+        
+        // 원본 버텍스 위치 저장 (쪼그라들 때 활용하기 위함)
+        cellMesh3.userData.basePositions = geo.attributes.position.clone();
+        cellMesh3.userData.isDeformed = false;
+
+        // 초기 등장액 스케일 (원반 모양: 위아래가 납작함)
+        cellMesh3.scale.set(1.0, 0.4, 1.0);
+        scene3.add(cellMesh3);
+
+        // 물 입자 세팅 (크기를 살짝 키우고 색상을 밝게 처리)
+        const pGeo = new THREE.SphereGeometry(0.08, 8, 8);
+        const pMat = new THREE.MeshBasicMaterial({ color: 0x93c5fd });
+        for(let i=0; i<150; i++) {
+            const p = new THREE.Mesh(pGeo, pMat);
+            resetWaterParticle(p, true);
+            scene3.add(p);
+            waterParticles3.push(p);
+        }
+
+        // 시점 컨트롤
+        container.addEventListener('mousedown', e => { isDragging3 = true; prevMouse3 = { x: e.offsetX, y: e.offsetY }; });
+        window.addEventListener('mouseup', () => isDragging3 = false);
+        container.addEventListener('mousemove', e => {
+            if(isDragging3) {
+                cellMesh3.rotation.y += (e.offsetX - prevMouse3.x) * 0.01;
+                cellMesh3.rotation.x += (e.offsetY - prevMouse3.y) * 0.01;
+                prevMouse3 = { x: e.offsetX, y: e.offsetY };
+            }
+        });
+
+        // 초기 히스토리 채우기
+        for(let i=0; i<50; i++) volumeHistory.push(100);
+
+        animateOsmosis3D();
+    }
+
+    function resetWaterParticle(p, isInit = false) {
+        const minR = 1.6, maxR = 4.5;
+        const r = isInit ? minR + Math.random()*(maxR-minR) : (p.userData.direction === 1 ? maxR : minR);
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos((Math.random() * 2) - 1);
+        
+        p.position.set(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi));
+        p.userData = { radius: r, theta: theta, phi: phi, speed: 0.02 + Math.random()*0.03, direction: 1 };
+    }
+
+    // 세포 모드 변경
+    function setOsmosis(type) {
+        currentCellMode = type;
+        isHemolysis = false;
+        cellMesh3.visible = true;
+        document.getElementById('hemolysis-alert').classList.add('hidden');
+        
+        // 폭발 파티클 제거
+        explosionParticles.forEach(p => scene3.remove(p.mesh));
+        explosionParticles = [];
+
+        const title = document.getElementById('osmosis-title');
+        const desc = document.getElementById('osmosis-desc');
+
+        if (type === 'hypotonic') {
+            targetVolumePercent = 170; // 터지는 임계점은 160
+            scene3.background = new THREE.Color(0x0f172a).lerp(new THREE.Color(0x1e3a8a), 0.3);
+            title.innerHTML = '<span class="text-blue-600">저장액</span> (세포 밖 농도 &lt; 세포 안 농도)';
+            desc.innerHTML = '물이 세포 안으로 계속 들어와 적혈구의 부피가 점점 커집니다.';
+        } else if (type === 'isotonic') {
+            targetVolumePercent = 100;
+            scene3.background = new THREE.Color(0x0f172a);
+            title.innerHTML = '<span class="text-slate-600">등장액</span> (세포 밖 농도 = 세포 안 농도)';
+            desc.innerHTML = '들어오는 물과 나가는 물의 양이 같아 적혈구의 부피가 100%로 유지됩니다.';
+        } else if (type === 'hypertonic') {
+            targetVolumePercent = 40; // 쪼그라드는 목표치
+            scene3.background = new THREE.Color(0x0f172a).lerp(new THREE.Color(0x4c1d95), 0.3);
+            title.innerHTML = '<span class="text-purple-600">고장액</span> (세포 밖 농도 &gt; 세포 안 농도)';
+            desc.innerHTML = '물이 세포 밖으로 빠져나가 적혈구의 부피가 점점 줄어들고 쪼그라듭니다.';
+        }
+    }
+
+    function triggerHemolysis() {
+        if(isHemolysis) return;
+        isHemolysis = true;
+        cellMesh3.visible = false;
+        document.getElementById('hemolysis-alert').classList.remove('hidden');
+
+        // 폭발 파티클 생성
+        const pGeo = new THREE.SphereGeometry(0.1, 8, 8);
+        const pMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.1 });
+        
+        for(let i=0; i<60; i++) {
+            const mesh = new THREE.Mesh(pGeo, pMat);
+            // 표면 근처에서 시작
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos((Math.random() * 2) - 1);
+            mesh.position.set( 1.5 * Math.sin(phi) * Math.cos(theta), 1.5 * Math.sin(phi) * Math.sin(theta), 1.5 * Math.cos(phi) );
+            scene3.add(mesh);
+            explosionParticles.push({
+                mesh: mesh,
+                vx: mesh.position.x * 0.1, vy: mesh.position.y * 0.1, vz: mesh.position.z * 0.1
+            });
+        }
+    }
+
+    // 2D 실시간 그래프 렌더링
+    function drawOsmosisGraph() {
+        const canvas = document.getElementById('osmosisGraphCanvas');
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width = 200;
+        const h = canvas.height = 120;
+
+        ctx.clearRect(0, 0, w, h);
+        
+        // 배경 및 축
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(30, 10); ctx.lineTo(30, h-20); // Y축
+        ctx.lineTo(w-10, h-20); // X축
+        ctx.stroke();
+
+        // 라벨
+        ctx.fillStyle = '#94a3b8'; ctx.font = '10px Noto Sans KR';
+        ctx.fillText('부피(%)', 5, 10);
+        ctx.fillText('100', 10, h/2);
+        ctx.fillText('시간', w-25, h-5);
+
+        // 100% 기준선
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath(); ctx.moveTo(30, h/2); ctx.lineTo(w-10, h/2); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 데이터 라인 그리기
+        if(volumeHistory.length === 0) return;
+        
+        ctx.strokeStyle = isHemolysis ? '#ef4444' : '#34d399'; // 터지면 빨강, 평소엔 초록
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        const step = (w - 40) / (volumeHistory.length - 1);
+        volumeHistory.forEach((vol, index) => {
+            const x = 30 + index * step;
+            // 100%가 h/2, 200%가 상단, 0%가 하단 매핑
+            const yMap = h - 20 - (vol / 200) * (h - 30); 
+            if(index === 0) ctx.moveTo(x, yMap);
+            else ctx.lineTo(x, yMap);
+        });
+        ctx.stroke();
+    }
+
+    function animateOsmosis3D() {
+        requestAnimationFrame(animateOsmosis3D);
+        if(!document.getElementById('tab-osmosis').classList.contains('active')) return;
+
+        // 부피 변화 로직 (Lerp)
+        if (!isHemolysis) {
+            volumePercent += (targetVolumePercent - volumePercent) * 0.01;
+            
+            // 용혈 현상 체크 (160% 초과시 터짐)
+            if (volumePercent > 160) {
+                triggerHemolysis();
+            } else {
+                // 부피 퍼센트에 따른 스케일 매핑
+                // 100% -> Y:0.4, XZ:1.0 (원반)
+                // 170% -> Y:1.2, XZ:1.2 (빵빵한 구)
+                // 40%  -> Y:0.2, XZ:0.8 (쪼그라듦)
+                let scaleY = 0.4 + (volumePercent - 100) * 0.011;
+                let scaleXZ = 1.0 + (volumePercent - 100) * 0.005;
+                
+                scaleY = Math.max(0.1, scaleY);
+                scaleXZ = Math.max(0.5, scaleXZ);
+                
+                cellMesh3.scale.set(scaleXZ, scaleY, scaleXZ);
+
+                // 고장액일 때 쪼그라드는 표면 텍스쳐(노이즈) 동적 적용
+                if (volumePercent < 90) {
+                    cellMesh3.userData.isDeformed = true;
+                    const positions = cellMesh3.geometry.attributes.position;
+                    const basePositions = cellMesh3.userData.basePositions;
+                    const intensity = (100 - volumePercent) * 0.003; // 수축할수록 쭈글쭈글해짐
+
+                    for (let i = 0; i < positions.count; i++) {
+                        const vx = basePositions.getX(i);
+                        const vy = basePositions.getY(i);
+                        const vz = basePositions.getZ(i);
+                        
+                        // 단순 사인파 노이즈 조합
+                        const noise = 1 + intensity * Math.sin(vx*10 + Date.now()*0.005) * Math.sin(vz*10);
+                        
+                        positions.setXYZ(i, vx*noise, vy*noise, vz*noise);
+                    }
+                    cellMesh3.geometry.computeVertexNormals();
+                    cellMesh3.geometry.attributes.position.needsUpdate = true;
+                } else if (cellMesh3.userData.isDeformed) {
+                    // 원래 구 형태로 복구
+                    const positions = cellMesh3.geometry.attributes.position;
+                    const basePositions = cellMesh3.userData.basePositions;
+                    for (let i = 0; i < positions.count; i++) {
+                        positions.setXYZ(i, basePositions.getX(i), basePositions.getY(i), basePositions.getZ(i));
+                    }
+                    cellMesh3.geometry.computeVertexNormals();
+                    cellMesh3.geometry.attributes.position.needsUpdate = true;
+                    cellMesh3.userData.isDeformed = false;
+                }
+            }
+        }
+
+        // 그래프 데이터 업데이트 (10프레임마다)
+        graphTick++;
+        if(graphTick % 10 === 0) {
+            volumeHistory.push(volumePercent);
+            if(volumeHistory.length > 50) volumeHistory.shift();
+            drawOsmosisGraph();
+        }
+
+        // 자전
+        if(!isDragging3 && !isHemolysis) {
+            cellMesh3.rotation.y += 0.005;
+        }
+
+        // 폭발 파티클 애니메이션
+        if (isHemolysis) {
+            explosionParticles.forEach(p => {
+                p.mesh.position.x += p.vx;
+                p.mesh.position.y += p.vy;
+                p.mesh.position.z += p.vz;
+                p.mesh.material.opacity -= 0.01;
+                p.mesh.material.transparent = true;
+            });
+        }
+
+        // 물 파티클 애니메이션
+        waterParticles3.forEach((p, index) => {
+            // 저장액: 들어오는 물(파티클 인덱스 다수) > 나가는 물
+            if(currentCellMode === 'hypotonic') p.userData.direction = index < 120 ? 1 : -1;
+            else if(currentCellMode === 'hypertonic') p.userData.direction = index < 120 ? -1 : 1;
+            else p.userData.direction = index < 75 ? 1 : -1;
+
+            p.userData.radius -= p.userData.speed * p.userData.direction;
+
+            if (p.userData.direction === 1 && p.userData.radius < 1.6) resetWaterParticle(p);
+            else if (p.userData.direction === -1 && p.userData.radius > 4.5) resetWaterParticle(p);
+
+            p.position.x = p.userData.radius * Math.sin(p.userData.phi) * Math.cos(p.userData.theta);
+            p.position.y = p.userData.radius * Math.sin(p.userData.phi) * Math.sin(p.userData.theta);
+            p.position.z = p.userData.radius * Math.cos(p.userData.phi);
+            
+            // 용혈 상태면 물 입자 숨김
+            p.visible = !isHemolysis; 
+        });
+
+        renderer3.render(scene3, camera3);
+    }
+
+    // =========================================================
+    // 4차시 및 대시보드 로직 (기존 유지)
+    // =========================================================
+    let submissions = []; 
+
+    function submitProposal() {
+        const group = document.getElementById('form-group').value.trim();
+        const topic = document.getElementById('form-topic').value;
+        const analysis = document.getElementById('form-analysis').value.trim();
+        const solution = document.getElementById('form-solution').value.trim();
+
+        if (!group || !topic || !analysis || !solution) {
+            showAlert("모든 항목을 꼼꼼히 작성해주세요!"); return;
+        }
+
+        const existingIndex = submissions.findIndex(s => s.group === group);
+        
+        if (existingIndex !== -1) {
+            // 이미 제출한 모둠인 경우, 내용을 덮어쓰고 이전 피드백을 보여줌
+            submissions[existingIndex].topic = topic;
+            submissions[existingIndex].analysis = analysis;
+            submissions[existingIndex].solution = solution;
+            
+            const sub = submissions[existingIndex];
+            let feedbackText = sub.feedback ? sub.feedback : (sub.aiDraft ? "AI 초안이 생성되었습니다. (선생님 최종 검토 대기 중)" : "아직 선생님의 피드백이 작성되지 않았습니다.");
+            
+            let htmlMsg = `
+                <div class="text-left text-sm">
+                    <h4 class="font-bold text-blue-700 mb-2">💡 제안서 업데이트 및 피드백 확인</h4>
+                    <p class="text-gray-600 mb-2">제출하신 제안서 내용이 성공적으로 수정되었습니다.</p>
+                    <div class="bg-indigo-50 p-3 rounded border border-indigo-200 mt-3">
+                        <span class="font-bold text-indigo-800 block mb-1">이전 제출에 대한 선생님 피드백:</span>
+                        <p class="text-indigo-900 whitespace-pre-wrap">${feedbackText}</p>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('proposal-form').reset();
+            showAlert(htmlMsg, true);
+            if (!document.getElementById('teacher-dashboard').classList.contains('hidden')) {
+                renderDashboard();
+            }
+            return;
+        }
+
+        // aiDraft 필드 추가
+        submissions.push({
+            id: Date.now(), group, topic, analysis, solution, feedback: null, aiDraft: null
+        });
+        
+        document.getElementById('proposal-form').reset();
+        showAlert("제안서가 성공적으로 제출되었습니다. 선생님의 피드백을 기다려주세요!");
+        if (!document.getElementById('teacher-dashboard').classList.contains('hidden')) {
+            renderDashboard();
+        }
+    }
+    
+    function checkFeedback() {
+        const group = document.getElementById('form-group').value.trim();
+        if (!group) { showAlert("피드백을 확인할 모둠명 및 구성원을 먼저 입력해주세요."); return; }
+        
+        const existingIndex = submissions.findIndex(s => s.group === group);
+        if(existingIndex === -1) {
+            showAlert("해당 모둠명으로 이전에 제출된 제안서가 없습니다.");
+        } else {
+            const sub = submissions[existingIndex];
+            let feedbackText = sub.feedback ? sub.feedback : (sub.aiDraft ? "AI 초안이 생성되었습니다. (선생님 최종 검토 대기 중)" : "아직 선생님의 피드백이 작성되지 않았습니다.");
+            let htmlMsg = `
+                <div class="text-left text-sm">
+                    <h4 class="font-bold text-blue-700 mb-2">💡 [${sub.group}] 피드백 내역</h4>
+                    <div class="bg-gray-100 p-2 rounded mb-2 text-xs">
+                        <span class="font-bold text-gray-600">제출했던 탐구 현상:</span><br> ${sub.topic}
+                    </div>
+                    <div class="bg-indigo-50 p-3 rounded border border-indigo-200">
+                        <span class="font-bold text-indigo-800 block mb-1">선생님 피드백:</span>
+                        <p class="text-indigo-900 whitespace-pre-wrap">${feedbackText}</p>
+                    </div>
+                </div>
+            `;
+            showAlert(htmlMsg, true);
+        }
+    }
+
+    function openPasswordModal() { document.getElementById('admin-pw').value = ''; document.getElementById('pw-modal').classList.remove('hidden'); }
+    function closePasswordModal() { document.getElementById('pw-modal').classList.add('hidden'); }
+    function verifyPassword() {
+        if (document.getElementById('admin-pw').value === '121212') {
+            closePasswordModal(); document.getElementById('teacher-dashboard').classList.remove('hidden'); renderDashboard();
+        } else { showAlert("비밀번호가 일치하지 않습니다."); }
+    }
+    function closeDashboard() { document.getElementById('teacher-dashboard').classList.add('hidden'); }
+
+    function renderDashboard() {
+        const container = document.getElementById('dashboard-content');
+        if (submissions.length === 0) {
+            container.innerHTML = `<div class="col-span-full text-center py-12 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">아직 제출된 모둠 제안서가 없습니다.</div>`;
+            return;
+        }
+
+        container.innerHTML = submissions.map((sub, index) => `
+            <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col h-full relative">
+                <!-- 상태 뱃지 표시 -->
+                <div class="absolute top-5 right-6">
+                    ${sub.feedback ? 
+                        '<span class="bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-full border border-green-200">최종 완료</span>' : 
+                        (sub.aiDraft ? '<span class="bg-purple-100 text-purple-700 text-xs font-bold px-2.5 py-1 rounded-full border border-purple-200">AI 초안 작성됨</span>' : '<span class="bg-gray-100 text-gray-500 text-xs font-bold px-2.5 py-1 rounded-full border border-gray-200">피드백 대기 중</span>')
+                    }
+                </div>
+                
+                <div class="flex justify-between items-start mb-4"><h3 class="font-bold text-lg text-blue-800 pr-24">${sub.group}</h3></div>
+                <div class="mb-3"><span class="text-xs font-bold text-gray-500 uppercase">탐구 현상</span><p class="text-gray-900 font-medium">${sub.topic}</p></div>
+                <div class="mb-3 bg-gray-50 p-3 rounded text-sm"><span class="block text-xs font-bold text-gray-500 uppercase mb-1">원리 분석</span><p class="text-gray-800">${sub.analysis}</p></div>
+                <div class="mb-4 bg-blue-50 p-3 rounded text-sm flex-1"><span class="block text-xs font-bold text-blue-500 uppercase mb-1">해결 방안 제안</span><p class="text-gray-800">${sub.solution}</p></div>
+                
+                <div class="mt-auto border-t border-gray-100 pt-4 bg-indigo-50/30 p-4 rounded-b-xl -mx-6 -mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-indigo-800 flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            교사 피드백 작성
+                        </span>
+                        <button onclick="generateAIFeedback(${index})" id="btn-ai-${index}" class="flex items-center gap-1 text-xs bg-white hover:bg-purple-50 text-purple-600 border border-purple-200 font-bold px-3 py-1.5 rounded-lg shadow-sm transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            AI 피드백 초안 생성
+                        </button>
+                    </div>
+                    <textarea id="feedback-text-${index}" rows="4" class="w-full border border-indigo-200 rounded-lg p-3 text-sm text-gray-800 mb-3 focus:ring-2 focus:ring-indigo-500 transition-colors bg-white/80" placeholder="직접 피드백을 작성하거나 우측 상단의 'AI 초안 생성' 버튼을 클릭하세요...">${sub.feedback || sub.aiDraft || ''}</textarea>
+                    <button onclick="saveFeedback(${index})" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-sm shadow-sm transition flex justify-center items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        최종 피드백 저장 및 전달
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // AI 피드백 초안 생성 로직 (시뮬레이션)
+    function generateAIFeedback(index) {
+        const sub = submissions[index];
+        const btn = document.getElementById(`btn-ai-${index}`);
+        const textarea = document.getElementById(`feedback-text-${index}`);
+        
+        // 로딩 상태 UI 표시
+        btn.innerHTML = `<svg class="animate-spin w-3.5 h-3.5 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 초안 분석 및 생성 중...`;
+        btn.disabled = true;
+        textarea.classList.add('bg-purple-50', 'animate-pulse');
+
+        setTimeout(() => {
+            let aiText = "[AI 맞춤형 초안]\n";
+            
+            const analysisText = sub.analysis.trim();
+            const solutionText = sub.solution.trim();
+            const combinedText = analysisText + " " + solutionText;
+            
+            // 1. 글자 수 및 무성의한 반복 문자 필터링
+            const isTooShort = analysisText.length < 15 || solutionText.length < 10;
+            const isMeaningless = /^(.)\1{4,}$/.test(analysisText) || /^(.)\1{4,}$/.test(solutionText); // 똑같은 글자 5번 이상 반복 (예: ㅋㅋㅋㅋㅋ)
+
+            // 2. 핵심 과학 키워드 포함 여부 검사
+            const hasKeywords = ["농도", "삼투", "확산", "물", "세포", "이동"].some(keyword => combinedText.includes(keyword));
+
+            if (isMeaningless || isTooShort) {
+                aiText += "작성된 내용이 너무 짧거나 과학적인 근거가 부족합니다. 선택한 현상이 왜 일어나는지 '농도 차이'와 '물(또는 물질)의 이동 방향'을 포함하여 더 구체적으로 논리정연하게 분석해 보세요.";
+            } else if (!hasKeywords) {
+                aiText += "제출한 내용에 핵심 과학 개념이 잘 드러나지 않습니다. [농도, 삼투, 확산, 세포막, 고장액, 저장액] 등 수업 시간에 배운 과학 용어를 적극적으로 활용하여 현상을 다시 분석하고 해결 방안을 보완해 보세요.";
+            } else {
+                // 3. 내용이 어느 정도 충실할 경우 주제별 맞춤 피드백 제공
+                if(sub.topic.includes("배추")) {
+                    aiText += "삼투 현상을 김장 과정과 아주 잘 연결하여 분석했습니다! 소금물(고장액) 환경에서 배추 세포 내의 수분이 밖으로 빠져나가는 원리를 정확히 이해했네요. 제안한 해결 방안도 합리적입니다. 인포그래픽 제작 시 '세포막을 경계로 한 농도 차이'와 '물의 이동 방향'을 화살표로 시각화하면 더욱 훌륭한 결과물이 될 것입니다.";
+                } else if(sub.topic.includes("목욕탕")) {
+                    aiText += "목욕탕 물(저장액)이 체액보다 농도가 낮아 삼투 현상에 의해 물이 세포 안으로 들어오는 현상을 정확하게 짚어주었습니다. 손가락 표피의 특성까지 고려한 분석이 훌륭합니다. 실생활 예시로 매우 적절하며, 이를 재미있게 설명하는 인포그래픽 기획이 기대됩니다.";
+                } else if(sub.topic.includes("비료")) {
+                    aiText += "과도한 비료가 토양을 고장액 상태로 만들어 식물 뿌리의 수분이 오히려 빠져나가는 '원형질 분리' 현상을 훌륭하게 분석했습니다. 농도에 따른 삼투압의 원리를 명확히 이해하고 있네요. 제안해주신 올바른 비료 사용법은 실생활에 바로 적용 가능한 유용한 과학적 가이드입니다.";
+                } else if(sub.topic.includes("시든 식물")) {
+                    aiText += "물을 주었을 때 흙 속의 물(저장액)이 식물 세포 안으로 이동하여 팽압을 발생시키는 원리를 잘 설명했습니다. 농도 차이에 따른 물의 이동을 정확히 이해하고 있습니다. 이를 바탕으로 식물 관리에 대한 실용적인 가이드를 인포그래픽으로 논리정연하게 잘 구성해보길 바랍니다.";
+                } else {
+                    aiText += "선택한 현상에 대해 세포막 물질 이동 원리를 적용하여 꼼꼼하게 분석한 점이 훌륭합니다. 농도 차이에 따른 물질의 이동을 과학적으로 잘 서술했습니다. 제시한 해결 방안을 시각적으로 어떻게 명확하게 표현할지 모둠원들과 조금 더 논의해본다면 완벽한 제안서가 될 것입니다.";
+                }
+            }
+
+            sub.aiDraft = aiText;
+            
+            // 상태(뱃지 등) 갱신을 위해 대시보드를 다시 그림
+            renderDashboard(); 
+        }, 1500);
+    }
+
+    function saveFeedback(index) {
+        submissions[index].feedback = document.getElementById(`feedback-text-${index}`).value.trim();
+        renderDashboard(); // 저장 후 '최종 완료' 뱃지로 업데이트하기 위해 리렌더링
+        showAlert("선생님의 최종 피드백이 저장되었습니다!");
+    }
+
+    function downloadCSV() {
+        if (submissions.length === 0) { showAlert("다운로드할 데이터가 없습니다."); return; }
+        let csvContent = "\uFEFF모둠명,탐구현상,원리분석,해결방안,피드백\n";
+        submissions.forEach(sub => {
+            const escape = t => `"${String(t || "").replace(/"/g, '""').replace(/\n/g, ' ')}"`;
+            csvContent += [escape(sub.group), escape(sub.topic), escape(sub.analysis), escape(sub.solution), escape(sub.feedback)].join(",") + "\n";
+        });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
+        a.download = '세포막_제안서_데이터.csv'; a.click();
+    }
+
+    function showAlert(msg, isHTML = false) {
+        const msgEl = document.getElementById('alert-message');
+        if (isHTML) {
+            msgEl.innerHTML = msg;
+        } else {
+            msgEl.innerText = msg;
+        }
+        document.getElementById('custom-alert').classList.remove('hidden');
+    }
+    function closeAlert() { document.getElementById('custom-alert').classList.add('hidden'); }
+
+    // 앱 초기화
+    window.onload = function() {
+        initStructure3D(); // 1차시 3D 세팅
+        initDiffusion3D(); // 2차시 3D 세팅
+        initOsmosis3D();   // 3차시 3D 세팅
+        
+        // 브라우저 창 크기 조절 시 대응
+        window.addEventListener('resize', () => {
+            resize3DCanvas('membrane-3d-container', camera1, renderer1);
+            resize3DCanvas('diffusion-3d-container', camera2, renderer2);
+            resize3DCanvas('osmosis-3d-container', camera3, renderer3);
+        });
+    };
+</script>
+
+</body>
+</html>
